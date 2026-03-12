@@ -1,0 +1,30 @@
+{
+  "name": "whatsapp-webhook-gordo-de-closet",
+  "description": "Wharsapp webhook for gordo de closet",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "test": "node test.js"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "axios": "^1.11.0",
+    "chrono-node": "^2.8.4",
+    "dayjs": "^1.11.18",
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.0.1",
+    "luxon": "^3.7.2",
+    "mysql2": "^3.14.4"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  },
+  "private": true
+}
