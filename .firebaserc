@@ -1,7 +1,8 @@
 {
   "projects": {
-    "default": "botrestaurante-70e0a",
-    "chatbotMajorBot": "botrestaurante-70e0a"
+    "default": "enolobot",
+    "enolobot": "enolobot",
+    "enolof": "enolobotchat"
   },
   "targets": {},
   "etags": {}

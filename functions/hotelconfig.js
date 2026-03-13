@@ -5,13 +5,13 @@
  * Agrega un bloque por cada hotel que planees manejar.
  */
 const HOTELS = {
-  // --- Ejemplo actual: MajorBot ---
-  majorbot: {
-    key: 'majorbot',
+  // --- Ejemplo actual: EnoloBot ---
+  enolobot: {
+    key: 'enolobot',
     hotelId: 6, // <-- ID del hotel activo
-    name: 'Rancho Paraíso Real',
+    name: 'Viñedo Enolobot',
     // Debe terminar con '/'
-    baseMediaUrl: 'https://ranchoparaisoreal.com/majorbot/public/',
+    baseMediaUrl: 'https://ranchoparaisoreal.com/enolobot/public/',
     // Estados "considerados disponibles" en BD
     availableStatuses: ['available', 'avaliable'], // contempla typo en datos
     // Lógica para decidir el hotelId para reservas (puedes hacerla más compleja si quieres)
@@ -42,10 +42,10 @@ const HOTELS = {
 /**
  * Selector de hotel por clave. Usará:
  * 1) process.env.HOTEL_KEY (inyectado desde secret/vars)
- * 2) 'majorbot' como default
+ * 2) 'enolobot' como default
  */
 function selectHotelConfig() {
-  const key = process.env.HOTEL_KEY || 'majorbot';
+  const key = process.env.HOTEL_KEY || 'enolobot';
   const cfg = HOTELS[key];
   if (!cfg) throw new Error(`HOTEL_KEY "${key}" no está configurado en hotelconfig.js`);
   return cfg;

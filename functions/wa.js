@@ -86,7 +86,33 @@ export async function sendInteractiveButtons({ to, body, buttons, token, phoneNu
 }
 
 export async function sendInteractiveList({ to, header, body, footer, buttonText = "Ver opciones", rows, token, phoneNumberId }) {
+  // Validate rows (WhatsApp requires at least 1 row, max 10 per section)
+  if (!Array.isArray(rows) || rows.length < 1 || rows.length > 10) {
+    logger.error('[wa] invalid rows count for list', { count: rows?.length });
+    // Fallback to text message
+    const optionsText = rows.map((r, i) => `${i + 1}. ${r.title}`).join('\n');
+    return sendWhatsAppText({ 
+      to, 
+      text: `${body}\n\n${optionsText}\n\nResponde con el número de la opción que desees.`, 
+      token, 
+      phoneNumberId 
+    });
+  }
+  
   const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+  
+  // Normalize rows (title max 24 chars, description max 72 chars, id max 200 chars)
+  const safeRows = rows.map(r => {
+    const row = {
+      id: String(r.id || '').slice(0, 200),
+      title: String(r.title || '').slice(0, 24)
+    };
+    if (r.description) {
+      row.description = String(r.description).slice(0, 72);
+    }
+    return row;
+  });
+  
   const payload = {
     messaging_product: "whatsapp",
     to,
@@ -101,12 +127,7 @@ export async function sendInteractiveList({ to, header, body, footer, buttonText
         sections: [
           {
             title: "Opciones",
-            rows: rows.map(r => ({
-              id: String(r.id),
-              title: String(r.title),
-              // Only include description if it exists (spread operator adds property conditionally)
-              ...(r.description && { description: String(r.description) })
-            })),
+            rows: safeRows,
           },
         ],
       },
@@ -117,10 +138,34 @@ export async function sendInteractiveList({ to, header, body, footer, buttonText
   if (!payload.interactive.header) delete payload.interactive.header;
   if (!payload.interactive.footer) delete payload.interactive.footer;
   
-  await axios.post(url, payload, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    timeout: 15000,
-  });
+  try {
+    logger.info('[wa] sending list', { to, rowCount: safeRows.length, buttonText });
+    
+    await axios.post(url, payload, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      timeout: 15000,
+    });
+    
+    logger.info('[wa] list sent successfully', { to });
+  } catch (err) {
+    // Log detailed error information for debugging
+    const data = err?.response?.data;
+    logger.error('[wa] sendList error', { 
+      status: err?.response?.status, 
+      data,
+      rowCount: safeRows.length,
+      rows: safeRows.map(r => ({ id: r.id, titleLen: r.title.length, hasDesc: !!r.description }))
+    });
+    
+    // Fallback to text message with numbered options
+    const optionsText = rows.map((r, i) => `${i + 1}. ${r.title}`).join('\n');
+    await sendWhatsAppText({ 
+      to, 
+      text: `${body}\n\n${optionsText}\n\nResponde con el número de la opción que desees.`, 
+      token, 
+      phoneNumberId 
+    });
+  }
 }
 
 // === Queue mechanism for message ordering ===

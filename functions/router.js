@@ -2,7 +2,7 @@
 import axios from "axios";
 import { logger } from "./config.js";
 import { getPool, getUserByPhone, normalizePhoneMX, amenityGetLastDraft, amenityCancel, cleanupRoomDraftsForGuest, getDraft, clearDraft } from "./db.js";
-import { sendWhatsAppText, sendInteractiveButtons, sendInteractiveList } from "./wa.js";
+import { sendWhatsAppText, sendInteractiveButtons, sendInteractiveList, delay } from "./wa.js";
 import { 
   startRoomFlow, 
   handleRoomButtons, 
@@ -28,6 +28,30 @@ import {
   handleServiceButtons,
   handleServiceText
 } from "./services.flow.js";
+import {
+  startWineFlow,
+  handleWineText,
+  handleWineButtons
+} from "./wines.flow.js";
+import {
+  startVineyardReservationFlow,
+  handleVineyardReservationText,
+  handleVineyardReservationButtons
+} from "./vineyard_reservation.flow.js";
+import {
+  startContactFlow,
+  handleContactText,
+  handleContactButtons
+} from "./contact.flow.js";
+import {
+  startPrivateEventsFlow,
+  handlePrivateEventsText
+} from "./private_events.flow.js";
+import {
+  startWineEventsFlow,
+  handleWineEventsText,
+  handleWineEventsButtons
+} from "./wine_events.flow.js";
 import { 
   showGuestMenu,
   handleGuestPostback
@@ -56,47 +80,26 @@ import { isPastDateYMD, MSG_DATE_PAST, MX_TZ, parseDateInputWithRelative } from 
 
 // === Menu functions ===
 async function sendMenuPrincipal({ to, token, phoneNumberId, isGuest = false, firstName = '' }) {
-  const menuRows = isGuest
-    ? [
-        { id: "main_reserve_room", title: "Reservar Habitación" },
-        { id: "main_reserve_amen", title: "Reservar Amenidades" },
-        { id: "main_reserve_table", title: "Reservar Mesas" },
-        { id: "main_request_service", title: "Solicitar Servicios" },
-      ]
-    : [
-        { id: "act_info", title: "Ver información" },
-      ];
+  // Enolobot menu with 5 options
+  const menuRows = [
+    { id: "enolobot_wine_purchase", title: "Comprar una botella" },
+    { id: "enolobot_reservation", title: "Hacer una reservación" },
+    { id: "enolobot_contact", title: "Contactar con administración" },
+    { id: "enolobot_private_events", title: "Pedir informes sobre eventos privados" },
+    { id: "enolobot_wine_events", title: "Asistir a cata o vendimia" }
+  ];
   
-  // Use list for guest menu (4 options), buttons for non-guest (1 option)
-  if (isGuest) {
-    const greeting = firstName ? `Hola ${firstName} bienvenido` : "Hola";
-    await sendInteractiveList({
-      to,
-      header: greeting,
-      body: "Tienes diferentes opciones ¿Qué deseas hacer?",
-      footer: "Selecciona aqui 👇",
-      buttonText: "Elegir",
-      rows: menuRows,
-      token,
-      phoneNumberId
-    });
-  } else {
-    let bodyText;
-    if (firstName) {
-      const labelTemplate = hotel.labels.mainMenuNonGuest;
-      bodyText = labelTemplate.replace('{name}', firstName);
-    } else {
-      bodyText = "Selecciona una opción:";
-    }
-    
-    await sendInteractiveButtons({
-      to,
-      body: bodyText,
-      buttons: menuRows,
-      token,
-      phoneNumberId
-    });
-  }
+  // Use list for 5 options
+  await sendInteractiveList({
+    to,
+    header: "Enolobot 🍷",
+    body: "¿Hoy qué necesitas o cómo te puedo ayudar?",
+    footer: "Selecciona aquí 👇",
+    buttonText: "Elegir",
+    rows: menuRows,
+    token,
+    phoneNumberId
+  });
 }
 
 async function sendInfoMenu({ to, token, phoneNumberId }) {
@@ -393,6 +396,57 @@ export async function handleWebhook(req, res, cfg) {
       return res.sendStatus(200);
     }
     
+    // === ENOLOBOT MAIN MENU ACTIONS ===
+    if (payload === "enolobot_wine_purchase") {
+      await startWineFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    if (payload === "enolobot_reservation") {
+      await startVineyardReservationFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    if (payload === "enolobot_contact") {
+      await startContactFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    if (payload === "enolobot_private_events") {
+      await startPrivateEventsFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    if (payload === "enolobot_wine_events") {
+      await startWineEventsFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    // === ENOLOBOT FLOW BUTTONS ===
+    // Wine purchase flow
+    if (payload.startsWith('wine_')) {
+      const handled = await handleWineButtons({ to: from, id: payload, pool, token, phoneNumberId });
+      if (handled) return res.sendStatus(200);
+    }
+    
+    // Vineyard reservation flow
+    if (payload.startsWith('vineyard_')) {
+      const handled = await handleVineyardReservationButtons({ to: from, id: payload, pool, token, phoneNumberId });
+      if (handled) return res.sendStatus(200);
+    }
+    
+    // Contact flow
+    if (payload.startsWith('contact_')) {
+      const handled = await handleContactButtons({ to: from, id: payload, pool, token, phoneNumberId });
+      if (handled) return res.sendStatus(200);
+    }
+    
+    // Wine events flow
+    if (payload.startsWith('wine_event_')) {
+      const handled = await handleWineEventsButtons({ to: from, id: payload, pool, token, phoneNumberId });
+      if (handled) return res.sendStatus(200);
+    }
+    
     // Main menu actions
     if (payload === "act_info") {
       await sendInfoMenu({ to: from, token, phoneNumberId, pool });
@@ -627,6 +681,57 @@ export async function handleWebhook(req, res, cfg) {
       }
     }
     
+    // === ENOLOBOT MAIN MENU ACTIONS (LIST) ===
+    if (payload === "enolobot_wine_purchase") {
+      await startWineFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    if (payload === "enolobot_reservation") {
+      await startVineyardReservationFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    if (payload === "enolobot_contact") {
+      await startContactFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    if (payload === "enolobot_private_events") {
+      await startPrivateEventsFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    if (payload === "enolobot_wine_events") {
+      await startWineEventsFlow({ to: from, token, phoneNumberId, pool });
+      return res.sendStatus(200);
+    }
+    
+    // === ENOLOBOT FLOW BUTTONS (LIST) ===
+    // Wine purchase flow
+    if (payload.startsWith('wine_')) {
+      const handled = await handleWineButtons({ to: from, id: payload, pool, token, phoneNumberId });
+      if (handled) return res.sendStatus(200);
+    }
+    
+    // Vineyard reservation flow
+    if (payload.startsWith('vineyard_')) {
+      const handled = await handleVineyardReservationButtons({ to: from, id: payload, pool, token, phoneNumberId });
+      if (handled) return res.sendStatus(200);
+    }
+    
+    // Contact flow
+    if (payload.startsWith('contact_')) {
+      const handled = await handleContactButtons({ to: from, id: payload, pool, token, phoneNumberId });
+      if (handled) return res.sendStatus(200);
+    }
+    
+    // Wine events flow
+    if (payload.startsWith('wine_event_')) {
+      const handled = await handleWineEventsButtons({ to: from, id: payload, pool, token, phoneNumberId });
+      if (handled) return res.sendStatus(200);
+    }
+    
     // Main menu list actions (guest menu with 4 options)
     if (payload === "main_reserve_room") {
       if (!user) {
@@ -711,7 +816,7 @@ export async function handleWebhook(req, res, cfg) {
     const txt = msg.text.body.trim();
     const txtLower = txt.toLowerCase();
     
-    if (txtLower === "hola") {
+    if (txtLower === "hola" || txtLower.includes("hola")) {
       // Log incoming phone and normalized version
       const normPhone = normalizePhoneMX(from);
       logger.info({ svc: 'router', action: 'auth', raw: from, norm: normPhone });
@@ -737,32 +842,63 @@ export async function handleWebhook(req, res, cfg) {
         logger.info({ svc: 'hola', action: 'cleared_room_state', userId: user.id, chatId });
       }
       
-      // If user doesn't exist, show guest menu for registration
-      if (!user) {
-        // Clean up any guest amenity draft for non-registered users
-        try {
-          await pool.execute(
-            `DELETE FROM user_drafts WHERE svc LIKE 'amenity_guest_%' AND user_id = 0`
-          );
-          logger.info({ svc: 'hola', action: 'cleared_guest_amenity_draft', phone: from });
-        } catch (err) {
-          logger.error({ svc: 'hola', action: 'clear_guest_draft_error', err: err.message });
-        }
-        
-        await showGuestMenu({ to: from, token, phoneNumberId, pool });
-        return res.sendStatus(200);
-      }
+      // Send Enolobot welcome message
+      const welcomeMessage = 
+        "Hola un placer leerte, me presento: soy *Enolobot*, un robot para ayudarte a encontrar el mejor vino para esa ocasión especial, realizar una reservación en tu viñedo favorito -ya sea- para realizar un recorrido o ir a comer en las opciones gastronómicas con las que contamos como catas-maridajes, eventos privados, comer, desayunar o cenar en los restaurantes que tenemos para ti ¿hoy qué necesitas o cómo te puedo ayudar?";
       
-      // Show menu for registered users
-      const isGuest = user?.role === 'guest';
+      await sendWhatsAppText({
+        to: from,
+        text: welcomeMessage,
+        token,
+        phoneNumberId
+      });
+      
+      await delay(800);
+      
+      // Show Enolobot menu
       await sendMenuPrincipal({ 
         to: from, 
         token, 
-        phoneNumberId, 
-        isGuest, 
-        firstName: user?.first_name || '' 
+        phoneNumberId
       });
       return res.sendStatus(200);
+    }
+    
+    // === Handle numeric menu responses (fallback for when list doesn't display) ===
+    if (/^[1-5]$/.test(txtLower)) {
+      const menuOptions = {
+        '1': 'enolobot_wine_purchase',
+        '2': 'enolobot_reservation',
+        '3': 'enolobot_contact',
+        '4': 'enolobot_private_events',
+        '5': 'enolobot_wine_events'
+      };
+      
+      const action = menuOptions[txtLower];
+      if (action) {
+        logger.info({ svc: 'router', action: 'numeric_menu', option: txtLower, mapped: action });
+        
+        if (action === 'enolobot_wine_purchase') {
+          await startWineFlow({ to: from, token, phoneNumberId, pool });
+          return res.sendStatus(200);
+        }
+        if (action === 'enolobot_reservation') {
+          await startVineyardReservationFlow({ to: from, token, phoneNumberId, pool });
+          return res.sendStatus(200);
+        }
+        if (action === 'enolobot_contact') {
+          await startContactFlow({ to: from, token, phoneNumberId, pool });
+          return res.sendStatus(200);
+        }
+        if (action === 'enolobot_private_events') {
+          await startPrivateEventsFlow({ to: from, token, phoneNumberId, pool });
+          return res.sendStatus(200);
+        }
+        if (action === 'enolobot_wine_events') {
+          await startWineEventsFlow({ to: from, token, phoneNumberId, pool });
+          return res.sendStatus(200);
+        }
+      }
     }
     
     // Check for reservation flow text inputs
@@ -813,9 +949,51 @@ export async function handleWebhook(req, res, cfg) {
         txt
       );
       if (handledGuestTable) return res.sendStatus(200);
+      
+      // === ENOLOBOT FLOWS (NON-USERS) ===
+      // Check wine purchase flow
+      const handledWine = await handleWineText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledWine) return res.sendStatus(200);
+      
+      // Check vineyard reservation flow
+      const handledVineyard = await handleVineyardReservationText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledVineyard) return res.sendStatus(200);
+      
+      // Check contact flow
+      const handledContact = await handleContactText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledContact) return res.sendStatus(200);
+      
+      // Check private events flow
+      const handledPrivateEvents = await handlePrivateEventsText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledPrivateEvents) return res.sendStatus(200);
+      
+      // Check wine events flow
+      const handledWineEvents = await handleWineEventsText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledWineEvents) return res.sendStatus(200);
     }
     
     if (user) {
+      // === ENOLOBOT FLOWS (USERS) ===
+      // Check wine purchase flow
+      const handledWine = await handleWineText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledWine) return res.sendStatus(200);
+      
+      // Check vineyard reservation flow
+      const handledVineyard = await handleVineyardReservationText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledVineyard) return res.sendStatus(200);
+      
+      // Check contact flow
+      const handledContact = await handleContactText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledContact) return res.sendStatus(200);
+      
+      // Check private events flow
+      const handledPrivateEvents = await handlePrivateEventsText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledPrivateEvents) return res.sendStatus(200);
+      
+      // Check wine events flow
+      const handledWineEvents = await handleWineEventsText({ to: from, text: txt, pool, token, phoneNumberId });
+      if (handledWineEvents) return res.sendStatus(200);
+      
       // Check draft-based flows first (tables uses draft)
       const draft = await getDraft(pool, user.id);
       

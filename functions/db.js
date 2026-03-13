@@ -1364,6 +1364,363 @@ export async function insertTableReservation(pool, data) {
   }
 }
 
+// === Enolobot - Wine Purchase Functions ===
+
+export async function createWineDraft(pool, { phone, step }) {
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO wine_purchases (phone, step, created_at) VALUES (?, ?, NOW())`,
+      [phone, step]
+    );
+    return { id: result.insertId, phone, step };
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'createWineDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function getWineDraft(pool, phone) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM wine_purchases WHERE phone = ? AND status = 'draft' ORDER BY id DESC LIMIT 1`,
+      [phone]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'getWineDraft', error: err.message });
+    return null;
+  }
+}
+
+export async function updateWineDraft(pool, id, updates) {
+  try {
+    const fields = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+    values.push(id);
+    await pool.execute(
+      `UPDATE wine_purchases SET ${fields.join(', ')} WHERE id = ?`,
+      values
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'updateWineDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function listAvailableWines(pool) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM wines WHERE is_active = 1 ORDER BY display_order ASC, name ASC`
+    );
+    return rows;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'listAvailableWines', error: err.message });
+    return [];
+  }
+}
+
+export async function getWineById(pool, wineId) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM wines WHERE id = ?`,
+      [wineId]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'getWineById', error: err.message });
+    return null;
+  }
+}
+
+export async function confirmWinePurchase(pool, draftId) {
+  try {
+    await pool.execute(
+      `UPDATE wine_purchases SET status = 'confirmed', updated_at = NOW() WHERE id = ?`,
+      [draftId]
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'confirmWinePurchase', error: err.message });
+    throw err;
+  }
+}
+
+export async function cancelWineDraft(pool, draftId) {
+  try {
+    await pool.execute(
+      `UPDATE wine_purchases SET status = 'cancelled' WHERE id = ?`,
+      [draftId]
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'cancelWineDraft', error: err.message });
+    throw err;
+  }
+}
+
+// === Enolobot - Vineyard Reservation Functions ===
+
+export async function createVineyardReservationDraft(pool, { phone, step }) {
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO vineyard_reservations (phone, step, created_at) VALUES (?, ?, NOW())`,
+      [phone, step]
+    );
+    return { id: result.insertId, phone, step };
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'createVineyardReservationDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function getVineyardReservationDraft(pool, phone) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM vineyard_reservations WHERE phone = ? AND status = 'draft' ORDER BY id DESC LIMIT 1`,
+      [phone]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'getVineyardReservationDraft', error: err.message });
+    return null;
+  }
+}
+
+export async function updateVineyardReservationDraft(pool, id, updates) {
+  try {
+    const fields = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+    values.push(id);
+    await pool.execute(
+      `UPDATE vineyard_reservations SET ${fields.join(', ')} WHERE id = ?`,
+      values
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'updateVineyardReservationDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function confirmVineyardReservation(pool, draftId) {
+  try {
+    await pool.execute(
+      `UPDATE vineyard_reservations SET status = 'confirmed', updated_at = NOW() WHERE id = ?`,
+      [draftId]
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'confirmVineyardReservation', error: err.message });
+    throw err;
+  }
+}
+
+export async function cancelVineyardReservationDraft(pool, draftId) {
+  try {
+    await pool.execute(
+      `UPDATE vineyard_reservations SET status = 'cancelled' WHERE id = ?`,
+      [draftId]
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'cancelVineyardReservationDraft', error: err.message });
+    throw err;
+  }
+}
+
+// === Enolobot - Contact Functions ===
+
+export async function createContactDraft(pool, { phone, step }) {
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO contact_requests (phone, step, created_at) VALUES (?, ?, NOW())`,
+      [phone, step]
+    );
+    return { id: result.insertId, phone, step };
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'createContactDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function getContactDraft(pool, phone) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM contact_requests WHERE phone = ? AND status = 'draft' ORDER BY id DESC LIMIT 1`,
+      [phone]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'getContactDraft', error: err.message });
+    return null;
+  }
+}
+
+export async function updateContactDraft(pool, id, updates) {
+  try {
+    const fields = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+    values.push(id);
+    await pool.execute(
+      `UPDATE contact_requests SET ${fields.join(', ')} WHERE id = ?`,
+      values
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'updateContactDraft', error: err.message });
+    throw err;
+  }
+}
+
+// === Enolobot - Private Events Functions ===
+
+export async function createPrivateEventDraft(pool, { phone, step }) {
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO private_event_requests (phone, step, created_at) VALUES (?, ?, NOW())`,
+      [phone, step]
+    );
+    return { id: result.insertId, phone, step };
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'createPrivateEventDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function getPrivateEventDraft(pool, phone) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM private_event_requests WHERE phone = ? AND status = 'draft' ORDER BY id DESC LIMIT 1`,
+      [phone]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'getPrivateEventDraft', error: err.message });
+    return null;
+  }
+}
+
+export async function updatePrivateEventDraft(pool, id, updates) {
+  try {
+    const fields = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+    values.push(id);
+    await pool.execute(
+      `UPDATE private_event_requests SET ${fields.join(', ')} WHERE id = ?`,
+      values
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'updatePrivateEventDraft', error: err.message });
+    throw err;
+  }
+}
+
+// === Enolobot - Wine Events (Catas/Vendimias) Functions ===
+
+export async function createWineEventDraft(pool, { phone, step }) {
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO wine_event_reservations (phone, step, created_at) VALUES (?, ?, NOW())`,
+      [phone, step]
+    );
+    return { id: result.insertId, phone, step };
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'createWineEventDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function getWineEventDraft(pool, phone) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM wine_event_reservations WHERE phone = ? AND status = 'draft' ORDER BY id DESC LIMIT 1`,
+      [phone]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'getWineEventDraft', error: err.message });
+    return null;
+  }
+}
+
+export async function updateWineEventDraft(pool, id, updates) {
+  try {
+    const fields = [];
+    const values = [];
+    for (const [key, value] of Object.entries(updates)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+    values.push(id);
+    await pool.execute(
+      `UPDATE wine_event_reservations SET ${fields.join(', ')} WHERE id = ?`,
+      values
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'updateWineEventDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function listAvailableWineEvents(pool) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM wine_events WHERE is_active = 1 AND event_date >= CURDATE() ORDER BY event_date ASC LIMIT 10`
+    );
+    return rows;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'listAvailableWineEvents', error: err.message });
+    return [];
+  }
+}
+
+export async function getWineEventById(pool, eventId) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT * FROM wine_events WHERE id = ?`,
+      [eventId]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'getWineEventById', error: err.message });
+    return null;
+  }
+}
+
+export async function confirmWineEventReservation(pool, draftId) {
+  try {
+    await pool.execute(
+      `UPDATE wine_event_reservations SET status = 'confirmed', updated_at = NOW() WHERE id = ?`,
+      [draftId]
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'confirmWineEventReservation', error: err.message });
+    throw err;
+  }
+}
+
+export async function cancelWineEventDraft(pool, draftId) {
+  try {
+    await pool.execute(
+      `UPDATE wine_event_reservations SET status = 'cancelled' WHERE id = ?`,
+      [draftId]
+    );
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'cancelWineEventDraft', error: err.message });
+    throw err;
+  }
+}
+
 // === Guest table reservation functions (for non-registered users) ===
 
 /**

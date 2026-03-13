@@ -8,16 +8,16 @@ if (!process.env.HOTEL_KEY) {
   // Try to get from Firebase config or use default
   try {
     const firebaseConfig = process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG) : null;
-    process.env.HOTEL_KEY = firebaseConfig?.app?.hotel_key || 'majorbot';
+    process.env.HOTEL_KEY = firebaseConfig?.app?.hotel_key || 'enolobot';
   } catch {
-    process.env.HOTEL_KEY = 'majorbot';
+    process.env.HOTEL_KEY = 'enolobot';
   }
 }
 
 // Initialize conversation tables on startup
 let tablesInitialized = false;
 
-export const whatsappWebhook_MajorBot = onRequest(FN_OPTIONS, async (req, res) => {
+export const whatsappWebhook_EnoloBot = onRequest(FN_OPTIONS, async (req, res) => {
   try {
     const cfg = {
       VERIFY_TOKEN: VERIFY_TOKEN.value(),

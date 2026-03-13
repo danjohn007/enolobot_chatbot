@@ -7,15 +7,15 @@ import { defineSecret } from "firebase-functions/params";
 export { onRequest, logger };
 
 // Define secrets
-export const VERIFY_TOKEN = defineSecret("VERIFY_TOKEN_MAJORBOT");//  278267
-export const WHATSAPP_TOKEN = defineSecret("WHATSAPP_TOKEN_MAJORBOT");//  EAAZAi58LtD6MBPkf5QmfWqJYMhxQVwY0XApZB1WokzWIJOEMC5jimrTZBVglckeLwQgTXbcXNQuaTpOVaeXcxTZAK1ZB2aCJUZBBVa7iK5zfhiuy6cPWCaS2zsmZCmpYJLdgbPCZBnbtHF3kFT6pL0x1vEiRlgtxzWnfb12TMYhDPbkDn22JTgZAZCjAehCKqs3gZDZD
-export const WHATSAPP_PHONE_NUMBER_ID = defineSecret("WHATSAPP_PHONE_NUMBER_ID_MAJORBOT");//  799834809882870
+export const VERIFY_TOKEN = defineSecret("VERIFY_TOKEN_ENOLOBOT");//  278267
+export const WHATSAPP_TOKEN = defineSecret("WHATSAPP_TOKEN_ENOLOBOT");//  EAAZAi58LtD6MBPkf5QmfWqJYMhxQVwY0XApZB1WokzWIJOEMC5jimrTZBVglckeLwQgTXbcXNQuaTpOVaeXcxTZAK1ZB2aCJUZBBVa7iK5zfhiuy6cPWCaS2zsmZCmpYJLdgbPCZBnbtHF3kFT6pL0x1vEiRlgtxzWnfb12TMYhDPbkDn22JTgZAZCjAehCKqs3gZDZD
+export const WHATSAPP_PHONE_NUMBER_ID = defineSecret("WHATSAPP_PHONE_NUMBER_ID_ENOLOBOT");//  799834809882870
 
-export const DB_HOST = defineSecret("DB_HOST_MAJORBOT");//  ranchoparaisoreal.com
-export const DB_USER = defineSecret("DB_USER_MAJORBOT");//  ranchopa_sistema
-export const DB_PASSWORD = defineSecret("DB_PASSWORD_MAJORBOT");//  Danjohn007!
-export const DB_NAME = defineSecret("DB_NAME_MAJORBOT");//  ranchopa_sistema
-export const BASE_MEDIA_URL = defineSecret("BASE_MEDIA_URL_MAJORBOT");//  https://ranchoparaisoreal.com/majorbot/public/
+export const DB_HOST = defineSecret("DB_HOST_ENOLOBOT");//  ranchoparaisoreal.com
+export const DB_USER = defineSecret("DB_USER_ENOLOBOT");//  ranchopa_sistema
+export const DB_PASSWORD = defineSecret("DB_PASSWORD_ENOLOBOT");//  Danjohn007!
+export const DB_NAME = defineSecret("DB_NAME_ENOLOBOT");//  ranchopa_sistema
+export const BASE_MEDIA_URL = defineSecret("BASE_MEDIA_URL_ENOLOBOT");//  https://ranchoparaisoreal.com/enolobot/public/
 
 // Firebase Function options
 export const FN_OPTIONS = {
