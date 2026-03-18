@@ -7,7 +7,11 @@ import {
 import { 
   createContactDraft,
   getContactDraft,
-  updateContactDraft
+  updateContactDraft,
+  getCustomerProfileByPhone,
+  saveCustomerProfile,
+  clearAllEnolobotDrafts,
+  getVineyardReservationDraft
 } from "./db.js";
 import { normalizeUserText } from "./price.js";
 
@@ -25,7 +29,49 @@ export async function startContactFlow({ to, token, phoneNumberId, pool }) {
   try {
     logger.info({ svc: 'contact', step: 'start', to });
     
-    // Create draft
+    // Clear all other Enolobot drafts to avoid conflicts
+    await clearAllEnolobotDrafts(pool, to);
+    
+    // Check if customer profile already exists
+    const profile = await getCustomerProfileByPhone(pool, to);
+    
+    if (profile && profile.customer_name) {
+      // Customer name already exists, skip to department selection
+      logger.info({ svc: 'contact', step: 'using_saved_name', name: profile.customer_name });
+      
+      const draft = await createContactDraft(pool, { 
+        phone: to, 
+        step: 'awaiting_department' 
+      });
+      
+      await updateContactDraft(pool, draft.id, { 
+        customer_name: profile.customer_name
+      });
+      
+      await sendWhatsAppText({
+        to,
+        text: `Mucho gusto ${profile.customer_name}\n¿Con qué área deseas contactarte?`,
+        token,
+        phoneNumberId
+      });
+      
+      // Show department options (max 3 buttons per WhatsApp limitation)
+      await sendInteractiveButtons({
+        to,
+        body: "Selecciona el área:",
+        buttons: [
+          { id: 'contact_dept_facturacion', title: 'Facturación' },
+          { id: 'contact_dept_gerencia', title: 'Gerencia' },
+          { id: 'contact_show_more_depts', title: 'Ver más opciones ➕' }
+        ],
+        token,
+        phoneNumberId
+      });
+      
+      return true;
+    }
+    
+    // No saved name, ask for it
     const draft = await createContactDraft(pool, { 
       phone: to, 
       step: 'awaiting_name' 
@@ -54,10 +100,32 @@ export async function startContactFlow({ to, token, phoneNumberId, pool }) {
 export async function handleContactText({ to, text, pool, token, phoneNumberId }) {
   try {
     const draft = await getContactDraft(pool, to);
-    if (!draft) return false;
+    if (!draft) {
+      logger.info({ svc: 'contact', action: 'no_draft_found', phone: to });
+      return false;
+    }
+    
+    // Double-check: verify there's no other active draft that has higher priority
+    const vineyardDraft = await getVineyardReservationDraft(pool, to);
+    if (vineyardDraft && vineyardDraft.id) {
+      logger.info({ 
+        svc: 'contact', 
+        action: 'skip_due_to_conflict', 
+        reason: 'vineyard_reservation_active', 
+        vineyard_draft_id: vineyardDraft.id,
+        contact_draft_id: draft.id 
+      });
+      // Delete this contact draft since there's a conflict
+      try {
+        await pool.execute(`DELETE FROM contact_requests WHERE id = ?`, [draft.id]);
+      } catch (delErr) {
+        logger.error({ svc: 'contact', action: 'delete_conflict_draft_failed', error: delErr.message });
+      }
+      return false;
+    }
     
     const step = draft.step || '';
-    logger.info({ svc: 'contact', step, text: normalizeUserText(text) });
+    logger.info({ svc: 'contact', step, text: normalizeUserText(text), draft_id: draft.id, draft_status: draft.status });
     
     // Step: awaiting_name
     if (step === 'awaiting_name') {
@@ -71,6 +139,9 @@ export async function handleContactText({ to, text, pool, token, phoneNumberId }
         });
         return true;
       }
+      
+      // Save customer name for future interactions
+      await saveCustomerProfile(pool, to, name);
       
       await updateContactDraft(pool, draft.id, { 
         customer_name: name,
@@ -91,14 +162,13 @@ export async function handleContactText({ to, text, pool, token, phoneNumberId }
         buttons: [
           { id: 'contact_dept_facturacion', title: 'Facturación' },
           { id: 'contact_dept_gerencia', title: 'Gerencia' },
-          { id: 'contact_dept_servicio', title: 'Servicio al cliente' }
+          { id: 'contact_show_more_depts', title: 'Ver más opciones ➕' }
         ],
         token,
         phoneNumberId
       });
       
-      // Note: Due to WhatsApp 3-button limit, we'll need to show remaining options separately
-      // For now, showing first 3 options
+      // Note: Due to WhatsApp 3-button limit, additional departments shown via "Ver más opciones" button
       
       return true;
     }
@@ -122,8 +192,9 @@ export async function handleContactButtons({ to, id, pool, token, phoneNumberId 
     if (id === 'contact_show_more_depts') {
       await sendInteractiveButtons({
         to,
-        body: "Más áreas:",
+        body: "Más áreas disponibles:",
         buttons: [
+          { id: 'contact_dept_servicio', title: 'Servicio al cliente' },
           { id: 'contact_dept_seguridad', title: 'Seguridad y estacionamiento' },
           { id: 'contact_dept_tienda', title: 'Tienda' }
         ],

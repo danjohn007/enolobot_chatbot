@@ -4,7 +4,8 @@ import { sendWhatsAppText } from "./wa.js";
 import { 
   createPrivateEventDraft,
   getPrivateEventDraft,
-  updatePrivateEventDraft
+  updatePrivateEventDraft,
+  clearAllEnolobotDrafts
 } from "./db.js";
 import { normalizeUserText } from "./price.js";
 
@@ -16,15 +17,12 @@ export async function startPrivateEventsFlow({ to, token, phoneNumberId, pool })
   try {
     logger.info({ svc: 'private_events', step: 'start', to });
     
-    // Create draft
-    const draft = await createPrivateEventDraft(pool, { 
-      phone: to, 
-      step: 'awaiting_name' 
-    });
+    // Clear all other Enolobot drafts to avoid conflicts
+    await clearAllEnolobotDrafts(pool, to);
     
     await sendWhatsAppText({
       to,
-      text: "¿Con quién tengo el gusto (Nombre y apellido)?",
+      text: "En el número 441 138 8731 te atenderemos con mucho gusto",
       token,
       phoneNumberId
     });

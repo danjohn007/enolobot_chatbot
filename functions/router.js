@@ -82,11 +82,31 @@ import { isPastDateYMD, MSG_DATE_PAST, MX_TZ, parseDateInputWithRelative } from 
 async function sendMenuPrincipal({ to, token, phoneNumberId, isGuest = false, firstName = '' }) {
   // Enolobot menu with 5 options
   const menuRows = [
-    { id: "enolobot_wine_purchase", title: "Comprar una botella" },
-    { id: "enolobot_reservation", title: "Hacer una reservación" },
-    { id: "enolobot_contact", title: "Contactar con administración" },
-    { id: "enolobot_private_events", title: "Pedir informes sobre eventos privados" },
-    { id: "enolobot_wine_events", title: "Asistir a cata o vendimia" }
+    { 
+      id: "enolobot_wine_purchase", 
+      title: "Comprar una Botella",
+      description: "Explora nuestro catálogo de vinos premium"
+    },
+    { 
+      id: "enolobot_reservation", 
+      title: "Hacer una reservación",
+      description: "Reserva tu mesa en nuestro restaurante o zona lounge"
+    },
+    { 
+      id: "enolobot_contact", 
+      title: "Contacto Admin.",
+      description: "Contactarte con personal de administración"
+    },
+    { 
+      id: "enolobot_private_events", 
+      title: "Eventos Privados",
+      description: "Pedir informes detallados sobre eventos privados"
+    },
+    { 
+      id: "enolobot_wine_events", 
+      title: "Catas y Vendimia",
+      description: "Asistir a la próxima cata de vino o vendimia"
+    }
   ];
   
   // Use list for 5 options
@@ -865,39 +885,60 @@ export async function handleWebhook(req, res, cfg) {
     }
     
     // === Handle numeric menu responses (fallback for when list doesn't display) ===
+    // BUT ONLY if there's no active flow draft
     if (/^[1-5]$/.test(txtLower)) {
-      const menuOptions = {
-        '1': 'enolobot_wine_purchase',
-        '2': 'enolobot_reservation',
-        '3': 'enolobot_contact',
-        '4': 'enolobot_private_events',
-        '5': 'enolobot_wine_events'
-      };
+      // Check if there's any active Enolobot draft first
+      const { 
+        getVineyardReservationDraft, 
+        getContactDraft, 
+        getPrivateEventDraft, 
+        getWineEventDraft,
+        getWineDraft
+      } = await import('./db.js');
       
-      const action = menuOptions[txtLower];
-      if (action) {
-        logger.info({ svc: 'router', action: 'numeric_menu', option: txtLower, mapped: action });
+      const hasActiveDraft = 
+        (await getVineyardReservationDraft(pool, from)) ||
+        (await getContactDraft(pool, from)) ||
+        (await getPrivateEventDraft(pool, from)) ||
+        (await getWineEventDraft(pool, from)) ||
+        (await getWineDraft(pool, from));
+      
+      if (!hasActiveDraft) {
+        const menuOptions = {
+          '1': 'enolobot_wine_purchase',
+          '2': 'enolobot_reservation',
+          '3': 'enolobot_contact',
+          '4': 'enolobot_private_events',
+          '5': 'enolobot_wine_events'
+        };
         
-        if (action === 'enolobot_wine_purchase') {
-          await startWineFlow({ to: from, token, phoneNumberId, pool });
-          return res.sendStatus(200);
+        const action = menuOptions[txtLower];
+        if (action) {
+          logger.info({ svc: 'router', action: 'numeric_menu', option: txtLower, mapped: action });
+          
+          if (action === 'enolobot_wine_purchase') {
+            await startWineFlow({ to: from, token, phoneNumberId, pool });
+            return res.sendStatus(200);
+          }
+          if (action === 'enolobot_reservation') {
+            await startVineyardReservationFlow({ to: from, token, phoneNumberId, pool });
+            return res.sendStatus(200);
+          }
+          if (action === 'enolobot_contact') {
+            await startContactFlow({ to: from, token, phoneNumberId, pool });
+            return res.sendStatus(200);
+          }
+          if (action === 'enolobot_private_events') {
+            await startPrivateEventsFlow({ to: from, token, phoneNumberId, pool });
+            return res.sendStatus(200);
+          }
+          if (action === 'enolobot_wine_events') {
+            await startWineEventsFlow({ to: from, token, phoneNumberId, pool });
+            return res.sendStatus(200);
+          }
         }
-        if (action === 'enolobot_reservation') {
-          await startVineyardReservationFlow({ to: from, token, phoneNumberId, pool });
-          return res.sendStatus(200);
-        }
-        if (action === 'enolobot_contact') {
-          await startContactFlow({ to: from, token, phoneNumberId, pool });
-          return res.sendStatus(200);
-        }
-        if (action === 'enolobot_private_events') {
-          await startPrivateEventsFlow({ to: from, token, phoneNumberId, pool });
-          return res.sendStatus(200);
-        }
-        if (action === 'enolobot_wine_events') {
-          await startWineEventsFlow({ to: from, token, phoneNumberId, pool });
-          return res.sendStatus(200);
-        }
+      } else {
+        logger.info({ svc: 'router', action: 'skip_numeric_menu', reason: 'active_draft_exists', number: txtLower });
       }
     }
     

@@ -1413,10 +1413,32 @@ export async function updateWineDraft(pool, id, updates) {
 
 export async function listAvailableWines(pool) {
   try {
+    const hasIsActive = await hasColumn(pool, 'wines', 'is_active');
+    const hasDisplayOrder = await hasColumn(pool, 'wines', 'display_order');
+
+    const whereClause = hasIsActive ? 'WHERE COALESCE(is_active, 1) = 1' : '';
+    const orderClause = hasDisplayOrder
+      ? 'ORDER BY display_order ASC, name ASC'
+      : 'ORDER BY name ASC';
+
     const [rows] = await pool.execute(
-      `SELECT * FROM wines WHERE is_active = 1 ORDER BY display_order ASC, name ASC`
+      `SELECT * FROM wines ${whereClause} ${orderClause}`
     );
-    return rows;
+
+    // Fallback: if all wines were accidentally deactivated, keep legacy behavior
+    // and return the catalog instead of breaking the flow.
+    if (hasIsActive && (!rows || rows.length === 0)) {
+      const [fallbackRows] = await pool.execute(`SELECT * FROM wines ${orderClause}`);
+      logger.warn({
+        svc: 'db',
+        action: 'listAvailableWines',
+        warn: 'active_filter_returned_empty_using_fallback',
+        count: fallbackRows?.length || 0
+      });
+      return fallbackRows;
+    }
+
+    return rows || [];
   } catch (err) {
     logger.error({ svc: 'db', action: 'listAvailableWines', error: err.message });
     return [];
@@ -1456,6 +1478,19 @@ export async function cancelWineDraft(pool, draftId) {
     );
   } catch (err) {
     logger.error({ svc: 'db', action: 'cancelWineDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function cancelWineDraftByPhone(pool, phone) {
+  try {
+    await pool.execute(
+      `DELETE FROM wine_purchases WHERE phone = ? AND status = 'draft'`,
+      [phone]
+    );
+    logger.info({ svc: 'db', action: 'cancelWineDraftByPhone', phone, method: 'delete' });
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'cancelWineDraftByPhone', error: err.message });
     throw err;
   }
 }
@@ -1531,6 +1566,19 @@ export async function cancelVineyardReservationDraft(pool, draftId) {
   }
 }
 
+export async function cancelVineyardReservationDraftByPhone(pool, phone) {
+  try {
+    await pool.execute(
+      `DELETE FROM vineyard_reservations WHERE phone = ? AND status = 'draft'`,
+      [phone]
+    );
+    logger.info({ svc: 'db', action: 'cancelVineyardReservationDraftByPhone', phone, method: 'delete' });
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'cancelVineyardReservationDraftByPhone', error: err.message });
+    throw err;
+  }
+}
+
 // === Enolobot - Contact Functions ===
 
 export async function createContactDraft(pool, { phone, step }) {
@@ -1574,6 +1622,19 @@ export async function updateContactDraft(pool, id, updates) {
     );
   } catch (err) {
     logger.error({ svc: 'db', action: 'updateContactDraft', error: err.message });
+    throw err;
+  }
+}
+
+export async function cancelContactDraft(pool, phone) {
+  try {
+    await pool.execute(
+      `DELETE FROM contact_requests WHERE phone = ? AND status = 'draft'`,
+      [phone]
+    );
+    logger.info({ svc: 'db', action: 'cancelContactDraft', phone, method: 'delete' });
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'cancelContactDraft', error: err.message });
     throw err;
   }
 }
@@ -1625,6 +1686,19 @@ export async function updatePrivateEventDraft(pool, id, updates) {
   }
 }
 
+export async function cancelPrivateEventDraft(pool, phone) {
+  try {
+    await pool.execute(
+      `DELETE FROM private_event_requests WHERE phone = ? AND status = 'draft'`,
+      [phone]
+    );
+    logger.info({ svc: 'db', action: 'cancelPrivateEventDraft', phone, method: 'delete' });
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'cancelPrivateEventDraft', error: err.message });
+    throw err;
+  }
+}
+
 // === Enolobot - Wine Events (Catas/Vendimias) Functions ===
 
 export async function createWineEventDraft(pool, { phone, step }) {
@@ -1672,6 +1746,19 @@ export async function updateWineEventDraft(pool, id, updates) {
   }
 }
 
+export async function cancelWineEventDraft(pool, phone) {
+  try {
+    await pool.execute(
+      `DELETE FROM wine_event_reservations WHERE phone = ? AND status = 'draft'`,
+      [phone]
+    );
+    logger.info({ svc: 'db', action: 'cancelWineEventDraft', phone, method: 'delete' });
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'cancelWineEventDraft', error: err.message });
+    throw err;
+  }
+}
+
 export async function listAvailableWineEvents(pool) {
   try {
     const [rows] = await pool.execute(
@@ -1709,14 +1796,32 @@ export async function confirmWineEventReservation(pool, draftId) {
   }
 }
 
-export async function cancelWineEventDraft(pool, draftId) {
+export async function cancelWineEventDraftById(pool, draftId) {
   try {
     await pool.execute(
       `UPDATE wine_event_reservations SET status = 'cancelled' WHERE id = ?`,
       [draftId]
     );
   } catch (err) {
-    logger.error({ svc: 'db', action: 'cancelWineEventDraft', error: err.message });
+    logger.error({ svc: 'db', action: 'cancelWineEventDraftById', error: err.message });
+    throw err;
+  }
+}
+
+// === Clear all Enolobot drafts for a phone number ===
+export async function clearAllEnolobotDrafts(pool, phone) {
+  try {
+    logger.info({ svc: 'db', action: 'clearAllEnolobotDrafts_start', phone });
+    await cancelWineDraftByPhone(pool, phone);
+    await cancelVineyardReservationDraftByPhone(pool, phone);
+    await cancelContactDraft(pool, phone);
+    await cancelPrivateEventDraft(pool, phone);
+    await cancelWineEventDraft(pool, phone);
+    // Small delay to ensure DB commits
+    await new Promise(resolve => setTimeout(resolve, 100));
+    logger.info({ svc: 'db', action: 'clearAllEnolobotDrafts_complete', phone });
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'clearAllEnolobotDrafts', error: err.message });
     throw err;
   }
 }
@@ -1843,6 +1948,100 @@ export async function insertGuestTableReservation(poolInstance, data) {
       error: err.message,
       code: err.code 
     });
+    throw err;
+  }
+}
+
+// === Customer Profile Functions ===
+
+/**
+ * Get or create customer profile by phone
+ * Returns the customer name if it exists, otherwise null
+ * @param {Object} pool - Database connection pool
+ * @param {string} rawPhone - Phone number (will be normalized)
+ * @returns {Promise<Object|null>} - { id, phone, customer_name } or null
+ */
+export async function getCustomerProfileByPhone(pool, rawPhone) {
+  try {
+    const phone = normalizePhoneMX(rawPhone);
+    if (!phone) return null;
+
+    // First check users table (registered users)
+    const [userRows] = await pool.execute(
+      'SELECT id, phone, CONCAT(first_name, " ", COALESCE(last_name, "")) as customer_name FROM users WHERE phone = ? LIMIT 1',
+      [phone]
+    );
+    
+    if (userRows.length > 0) {
+      return {
+        id: userRows[0].id,
+        phone: userRows[0].phone,
+        customer_name: userRows[0].customer_name.trim(),
+        source: 'users'
+      };
+    }
+
+    // Then check customer_profiles table (non-registered contacts)
+    const [profileRows] = await pool.execute(
+      'SELECT id, phone, customer_name FROM customer_profiles WHERE phone = ? LIMIT 1',
+      [phone]
+    );
+    
+    if (profileRows.length > 0) {
+      return {
+        id: profileRows[0].id,
+        phone: profileRows[0].phone,
+        customer_name: profileRows[0].customer_name,
+        source: 'customer_profiles'
+      };
+    }
+
+    return null;
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'getCustomerProfileByPhone', error: err.message });
+    return null;
+  }
+}
+
+/**
+ * Save customer profile (upsert)
+ * @param {Object} pool - Database connection pool
+ * @param {string} rawPhone - Phone number (will be normalized)
+ * @param {string} customerName - Full name of customer
+ * @returns {Promise<Object>} - { id, phone, customer_name }
+ */
+export async function saveCustomerProfile(pool, rawPhone, customerName) {
+  try {
+    const phone = normalizePhoneMX(rawPhone);
+    if (!phone || !customerName) {
+      throw new Error('Phone and customer name are required');
+    }
+
+    // Use INSERT ... ON DUPLICATE KEY UPDATE to handle upsert
+    const [result] = await pool.execute(
+      `INSERT INTO customer_profiles (phone, customer_name, created_at, updated_at) 
+       VALUES (?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE customer_name = ?, updated_at = NOW()`,
+      [phone, customerName, customerName]
+    );
+
+    // Get the record (either inserted or updated)
+    const [rows] = await pool.execute(
+      'SELECT id, phone, customer_name FROM customer_profiles WHERE phone = ? LIMIT 1',
+      [phone]
+    );
+
+    logger.info({ 
+      svc: 'db', 
+      action: 'saveCustomerProfile', 
+      phone, 
+      name: customerName,
+      isNew: result.affectedRows === 1
+    });
+
+    return rows[0];
+  } catch (err) {
+    logger.error({ svc: 'db', action: 'saveCustomerProfile', error: err.message });
     throw err;
   }
 }

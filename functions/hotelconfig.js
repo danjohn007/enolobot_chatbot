@@ -11,7 +11,7 @@ const HOTELS = {
     hotelId: 6, // <-- ID del hotel activo
     name: 'Viñedo Enolobot',
     // Debe terminar con '/'
-    baseMediaUrl: 'https://ranchoparaisoreal.com/enolobot/public/',
+    baseMediaUrl: 'http://enolobot.digital/sistema/public/uploads/',
     // Estados "considerados disponibles" en BD
     availableStatuses: ['available', 'avaliable'], // contempla typo en datos
     // Lógica para decidir el hotelId para reservas (puedes hacerla más compleja si quieres)
@@ -21,11 +21,25 @@ const HOTELS = {
     },
     // Construcción de URLs de imagen en base a image_path (uploads/...).
     buildImageUrl(imagePath) {
-      if (!imagePath) return null;
-      if (/^https?:\/\//i.test(imagePath)) return imagePath;
+      console.log('[hotelconfig] buildImageUrl called with:', imagePath);
+      if (!imagePath) {
+        console.log('[hotelconfig] imagePath is null/empty, returning null');
+        return null;
+      }
+      if (/^https?:\/\//i.test(imagePath)) {
+        console.log('[hotelconfig] imagePath is full URL, returning as-is:', imagePath);
+        return imagePath;
+      }
       let p = imagePath.replace(/^\/+/, '').replace(/^public\//, '');
       const b = this.baseMediaUrl.endsWith('/') ? this.baseMediaUrl : this.baseMediaUrl + '/';
-      return b + p;
+      const finalUrl = b + p;
+      console.log('[hotelconfig] Constructed URL:', { 
+        original: imagePath, 
+        processed: p, 
+        baseUrl: b, 
+        final: finalUrl 
+      });
+      return finalUrl;
     },
     // Mensajes/etiquetas personalizables por hotel (opcional)
     labels: {

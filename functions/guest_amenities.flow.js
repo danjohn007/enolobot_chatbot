@@ -23,6 +23,7 @@ import {
 } from "./price.js";
 import { normalizeHHMM, isTimeInRange, isPastDateYMD, MSG_DATE_PAST, MX_TZ, parseDateInputWithRelative } from "./time_utils.js";
 import { buildImageUrlFromConfig } from "./hotelconfig.js";
+import { sendChatbotEmailPayload } from "./email.js";
 
 const PAGE_SIZE = 6; // Number of amenities to show per page
 const AMENITY_DISPLAY_DELAY = 1500;
@@ -67,11 +68,20 @@ async function sendAmenityCard({ to, token, phoneNumberId }, amenity) {
   if (imageUrl) {
     try {
       await sendImageWithCaption({ to, imageUrl, caption, token, phoneNumberId });
-    } catch {
-      await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+    } catch (imgErr) {
+      logger.error({ svc: 'amenity_guest', action: 'image_send_failed', error: imgErr.message });
+      try {
+        await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+      } catch (textErr) {
+        logger.error({ svc: 'amenity_guest', action: 'fallback_text_failed', error: textErr.message });
+      }
     }
   } else {
-    await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+    try {
+      await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+    } catch (textErr) {
+      logger.error({ svc: 'amenity_guest', action: 'text_only_failed', error: textErr.message });
+    }
   }
 
   const amenityId = amenity.id ?? amenity.amenity_id;
@@ -585,6 +595,12 @@ async function handleConfirm(ctx) {
     
     // Clear draft
     await clearGuestDraft(pool, from);
+
+    await sendChatbotEmailPayload({
+      correoDestinatario: draft.guest_email,
+      mensajeUsuario: `Reservacion de amenidad confirmada. Nombre: ${draft.guest_name}. Amenidad: ${draft.amenity_name}. Fecha: ${formatDateDMY2(draft.reservation_date)}. Hora: ${String(draft.reservation_time || '').slice(0, 5)}. Personas: ${draft.party_size}.`,
+      idChat: from,
+    });
     
     // Send success message
     await sendWhatsAppText({

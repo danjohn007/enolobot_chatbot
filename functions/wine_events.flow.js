@@ -11,24 +11,23 @@ import {
   updateWineEventDraft,
   listAvailableWineEvents,
   getWineEventById,
-  confirmWineEventReservation
+  confirmWineEventReservation,
+  clearAllEnolobotDrafts
 } from "./db.js";
 import { normalizeUserText, isValidEmail, formatMoneyMXN } from "./price.js";
+import { sendChatbotEmailPayload } from "./email.js";
 
 // === Start wine events flow ===
 export async function startWineEventsFlow({ to, token, phoneNumberId, pool }) {
   try {
     logger.info({ svc: 'wine_events', step: 'start', to });
     
-    // Create draft
-    const draft = await createWineEventDraft(pool, { 
-      phone: to, 
-      step: 'awaiting_name' 
-    });
+    // Clear all other Enolobot drafts to avoid conflicts
+    await clearAllEnolobotDrafts(pool, to);
     
     await sendWhatsAppText({
       to,
-      text: "¿Con quién tengo el gusto (Nombre y apellido)?",
+      text: "https://donato.com.mx/donato-todo-el-ano/",
       token,
       phoneNumberId
     });
@@ -207,6 +206,12 @@ export async function handleWineEventsText({ to, text, pool, token, phoneNumberI
         `*¿Cómo llegar?*\n` +
         `https://maps.app.goo.gl/NYNzXRZksqTfhh83A\n\n` +
         `Hemos enviado un email, confírmanos y tu lugar está garantizado. 🍷`;
+
+      await sendChatbotEmailPayload({
+        correoDestinatario: email,
+        mensajeUsuario: `Reservacion de evento confirmada. Cliente: ${draft.customer_name}. Evento: ${event?.name || 'N/A'}. Fecha: ${event?.event_date || 'N/A'}. Personas: ${draft.party_size}. Total: ${formatMoneyMXN(draft.total_amount)}. Metodo de pago: ${draft.payment_method}.`,
+        idChat: to,
+      });
       
       await sendWhatsAppText({
         to,

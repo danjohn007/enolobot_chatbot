@@ -10,17 +10,50 @@ import {
   getVineyardReservationDraft,
   updateVineyardReservationDraft,
   confirmVineyardReservation,
-  cancelVineyardReservationDraft
+  cancelVineyardReservationDraft,
+  getCustomerProfileByPhone,
+  saveCustomerProfile,
+  clearAllEnolobotDrafts
 } from "./db.js";
 import { normalizeUserText, isValidEmail, formatDateDMY2 } from "./price.js";
 import { parseDateInputWithRelative, formatISOasDMY, MX_TZ, isPastDateYMD, MSG_DATE_PAST } from "./time_utils.js";
+import { sendChatbotEmailPayload } from "./email.js";
 
 // === Start vineyard reservation flow ===
 export async function startVineyardReservationFlow({ to, token, phoneNumberId, pool }) {
   try {
     logger.info({ svc: 'vineyard_reservation', step: 'start', to });
     
-    // Create draft
+    // Clear all other Enolobot drafts to avoid conflicts
+    await clearAllEnolobotDrafts(pool, to);
+    
+    // Check if customer profile already exists
+    const profile = await getCustomerProfileByPhone(pool, to);
+    
+    if (profile && profile.customer_name) {
+      // Customer name already exists, skip to party size
+      logger.info({ svc: 'vineyard_reservation', step: 'using_saved_name', name: profile.customer_name });
+      
+      const draft = await createVineyardReservationDraft(pool, { 
+        phone: to, 
+        step: 'awaiting_party_size' 
+      });
+      
+      await updateVineyardReservationDraft(pool, draft.id, { 
+        customer_name: profile.customer_name
+      });
+      
+      await sendWhatsAppText({
+        to,
+        text: `Mucho gusto ${profile.customer_name}\n¿Para cuántas personas deseas reservar?`,
+        token,
+        phoneNumberId
+      });
+      
+      return true;
+    }
+    
+    // No saved name, ask for it
     const draft = await createVineyardReservationDraft(pool, { 
       phone: to, 
       step: 'awaiting_name' 
@@ -49,10 +82,13 @@ export async function startVineyardReservationFlow({ to, token, phoneNumberId, p
 export async function handleVineyardReservationText({ to, text, pool, token, phoneNumberId }) {
   try {
     const draft = await getVineyardReservationDraft(pool, to);
-    if (!draft) return false;
+    if (!draft) {
+      logger.info({ svc: 'vineyard_reservation', action: 'no_draft_found', phone: to });
+      return false;
+    }
     
     const step = draft.step || '';
-    logger.info({ svc: 'vineyard_reservation', step, text: normalizeUserText(text) });
+    logger.info({ svc: 'vineyard_reservation', step, text: normalizeUserText(text), draft_id: draft.id, draft_status: draft.status });
     
     // Step: awaiting_name
     if (step === 'awaiting_name') {
@@ -66,6 +102,9 @@ export async function handleVineyardReservationText({ to, text, pool, token, pho
         });
         return true;
       }
+      
+      // Save customer name for future interactions
+      await saveCustomerProfile(pool, to, name);
       
       await updateVineyardReservationDraft(pool, draft.id, { 
         customer_name: name,
@@ -109,6 +148,7 @@ export async function handleVineyardReservationText({ to, text, pool, token, pho
         phoneNumberId
       });
       
+      logger.info({ svc: 'vineyard_reservation', action: 'party_size_processed', party_size: n, next_step: 'awaiting_date' });
       return true;
     }
     
@@ -188,6 +228,12 @@ export async function handleVineyardReservationText({ to, text, pool, token, pho
         `*¿Cómo llegar?*\n` +
         `https://maps.app.goo.gl/NYNzXRZksqTfhh83A\n\n` +
         `Hemos enviado un email, confírmanos y tu lugar está garantizado. 🍷`;
+
+      await sendChatbotEmailPayload({
+        correoDestinatario: email,
+        mensajeUsuario: `Reservacion confirmada. Cliente: ${draft.customer_name}. Fecha: ${formatISOasDMY(draft.reservation_date)}. Personas: ${draft.party_size}. Espacio: ${draft.space_type || 'N/A'}.`,
+        idChat: to,
+      });
       
       await sendWhatsAppText({
         to,

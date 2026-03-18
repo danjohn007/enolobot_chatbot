@@ -2,6 +2,48 @@
 import axios from "axios";
 import { logger } from "./config.js";
 
+function inferImageFileName(url, contentType) {
+  const lowerType = String(contentType || '').toLowerCase();
+  if (lowerType.includes('png')) return 'image.png';
+  if (lowerType.includes('webp')) return 'image.webp';
+  if (lowerType.includes('gif')) return 'image.gif';
+
+  const cleanUrl = String(url || '').split('?')[0];
+  const extMatch = cleanUrl.match(/\.([a-z0-9]{3,4})$/i);
+  if (extMatch) return `image.${extMatch[1].toLowerCase()}`;
+  return 'image.jpg';
+}
+
+async function uploadRemoteImageToWhatsApp({ imageUrl, token, phoneNumberId }) {
+  const fileResp = await axios.get(imageUrl, {
+    responseType: 'arraybuffer',
+    timeout: 20000,
+  });
+
+  const contentType = fileResp?.headers?.['content-type'] || 'image/jpeg';
+  const fileName = inferImageFileName(imageUrl, contentType);
+
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('file', new Blob([fileResp.data], { type: contentType }), fileName);
+
+  const uploadUrl = `https://graph.facebook.com/v20.0/${phoneNumberId}/media`;
+  const uploadResp = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: form,
+  });
+
+  const payload = await uploadResp.json().catch(() => ({}));
+  if (!uploadResp.ok || !payload?.id) {
+    throw new Error(`media_upload_failed_${uploadResp.status}`);
+  }
+
+  return payload.id;
+}
+
 export async function sendWhatsAppText({ to, text, token, phoneNumberId }) {
   const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
   await axios.post(url, {
@@ -17,15 +59,48 @@ export async function sendWhatsAppText({ to, text, token, phoneNumberId }) {
 
 export async function sendWhatsAppImage({ to, imageUrl, caption, token, phoneNumberId }) {
   const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
-  await axios.post(url, {
-    messaging_product: "whatsapp",
-    to,
-    type: "image",
-    image: { link: imageUrl, caption: caption || '' },
-  }, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    timeout: 15000,
+
+  logger.info({ 
+    svc: 'wa', 
+    action: 'sendWhatsAppImage_called', 
+    to, 
+    imageUrl, 
+    captionLength: caption?.length || 0,
+    phoneNumberId 
   });
+
+  try {
+    // Enviar directamente con link - ahora que el servidor sirve las imágenes correctamente
+    const response = await axios.post(url, {
+      messaging_product: "whatsapp",
+      to,
+      type: "image",
+      image: { link: imageUrl, caption: caption || '' },
+    }, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      timeout: 15000,
+    });
+    
+    logger.info({ 
+      svc: 'wa', 
+      action: 'sendWhatsAppImage_success', 
+      imageUrl,
+      responseStatus: response?.status,
+      messageId: response?.data?.messages?.[0]?.id
+    });
+  } catch (err) {
+    logger.error({ 
+      svc: 'wa', 
+      action: 'sendWhatsAppImage_error', 
+      imageUrl,
+      error: err.message,
+      errorCode: err?.response?.data?.error?.code,
+      errorMessage: err?.response?.data?.error?.message,
+      errorDetails: err?.response?.data?.error?.error_data,
+      statusCode: err?.response?.status
+    });
+    throw err;
+  }
 }
 
 export async function sendImageWithCaption({ to, imageUrl, caption, token, phoneNumberId }) {

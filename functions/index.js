@@ -1,4 +1,4 @@
-// Node 22, ESM - Minimal entrypoint
+// Node 22, ESM - Minimal entrypoint (v2024.03.17.5)
 import { onRequest, logger, FN_OPTIONS, VERIFY_TOKEN, WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, BASE_MEDIA_URL } from "./config.js";
 import { handleWebhook } from "./router.js";
 import { getPool, ensureConversationTables } from "./db.js";

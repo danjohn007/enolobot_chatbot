@@ -81,9 +81,22 @@ async function sendRoomCard({ to, room, token, phoneNumberId, pool, cfg }) {
   const caption = buildRoomCaption(room);
   
   if (url) {
-    await sendWhatsAppImage({ to, imageUrl: url, caption, token, phoneNumberId });
+    try {
+      await sendWhatsAppImage({ to, imageUrl: url, caption, token, phoneNumberId });
+    } catch (imgErr) {
+      logger.error({ svc: 'rooms', action: 'image_send_failed', room_id: room.id, error: imgErr.message });
+      try {
+        await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+      } catch (textErr) {
+        logger.error({ svc: 'rooms', action: 'fallback_text_failed', room_id: room.id, error: textErr.message });
+      }
+    }
   } else {
-    await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+    try {
+      await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+    } catch (textErr) {
+      logger.error({ svc: 'rooms', action: 'text_only_failed', room_id: room.id, error: textErr.message });
+    }
   }
   
   // Send action buttons
@@ -170,9 +183,22 @@ ${desc}
   // Get and send main image using primary_image_path from room object
   const mainImage = buildPublicUrl(baseMediaUrl, room.primary_image_path);
   if (mainImage) {
-    await sendWhatsAppImage({ to, imageUrl: mainImage, caption: text, token, phoneNumberId });
+    try {
+      await sendWhatsAppImage({ to, imageUrl: mainImage, caption: text, token, phoneNumberId });
+    } catch (imgErr) {
+      logger.error({ svc: 'rooms', action: 'image_send_failed_minimal', room_id: room.id, error: imgErr.message });
+      try {
+        await sendWhatsAppText({ to, text, token, phoneNumberId });
+      } catch (textErr) {
+        logger.error({ svc: 'rooms', action: 'fallback_text_failed_minimal', room_id: room.id, error: textErr.message });
+      }
+    }
   } else {
-    await sendWhatsAppText({ to, text, token, phoneNumberId });
+    try {
+      await sendWhatsAppText({ to, text, token, phoneNumberId });
+    } catch (textErr) {
+      logger.error({ svc: 'rooms', action: 'text_only_failed_minimal', room_id: room.id, error: textErr.message });
+    }
   }
 
   // Send action buttons
@@ -293,7 +319,11 @@ export async function handleRoomButtons({ to, id, pool, user, token, phoneNumber
     for (const imagePath of slice) {
       const url = buildPublicUrl(cfg.BASE_MEDIA_URL, imagePath);
       if (url) {
-        await sendWhatsAppImage({ to, imageUrl: url, caption: '', token, phoneNumberId });
+        try {
+          await sendWhatsAppImage({ to, imageUrl: url, caption: '', token, phoneNumberId });
+        } catch (imgErr) {
+          logger.error({ svc: 'rooms', action: 'image_send_failed_gallery', error: imgErr.message });
+        }
       }
       await delay(500);
     }

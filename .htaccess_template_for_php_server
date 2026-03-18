@@ -1,0 +1,36 @@
+# .htaccess para enolobot.digital/sistema/public/
+# Copiar este archivo a: /ruta/del/servidor/enolobot.digital/sistema/public/.htaccess
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Regla 1: Si el archivo o carpeta existe físicamente, servirlo directamente
+    # Esto incluye todos los archivos en /uploads/
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Regla 2: Excepción explícita para la carpeta uploads (por si acaso)
+    # No enviar archivos de uploads/ al front-controller
+    RewriteRule ^uploads/ - [L]
+
+    # Regla 3: Todo lo demás va al front-controller de PHP
+    # (Rutas que NO son archivos físicos ni están en uploads)
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Headers para imágenes (opcional pero recomendado)
+<IfModule mod_headers.c>
+    <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg)$">
+        Header set Cache-Control "max-age=2592000, public"
+    </FilesMatch>
+</IfModule>
+
+# MIME types correctos (por si faltan en el servidor)
+<IfModule mod_mime.c>
+    AddType image/jpeg .jpg .jpeg
+    AddType image/png .png
+    AddType image/gif .gif
+    AddType image/webp .webp
+    AddType image/svg+xml .svg
+</IfModule>

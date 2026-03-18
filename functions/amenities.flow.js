@@ -80,11 +80,20 @@ async function sendAmenityCard({ to, token, phoneNumberId, pool }, amenity) {
   if (imageUrl) {
     try {
       await sendImageWithCaption({ to, imageUrl, caption, token, phoneNumberId });
-    } catch {
-      await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+    } catch (imgErr) {
+      logger.error({ svc: 'amenity', action: 'image_send_failed', error: imgErr.message });
+      try {
+        await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+      } catch (textErr) {
+        logger.error({ svc: 'amenity', action: 'fallback_text_failed', error: textErr.message });
+      }
     }
   } else {
-    await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+    try {
+      await sendWhatsAppText({ to, text: caption, token, phoneNumberId });
+    } catch (textErr) {
+      logger.error({ svc: 'amenity', action: 'text_only_failed', error: textErr.message });
+    }
   }
 
   const amenityId = amenity.id ?? amenity.amenity_id;
