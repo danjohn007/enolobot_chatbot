@@ -2045,3 +2045,143 @@ export async function saveCustomerProfile(pool, rawPhone, customerName) {
     throw err;
   }
 }
+
+// ...existing code...
+// ...existing code (línea ~2050)...
+
+/**
+ * Registrar interacción del usuario en conversation_logs
+ * Estructura actualizada según schema MySQL actual
+ */
+export async function logConversation(pool, { 
+  phone, 
+  messageType = 'text',      // 'text', 'button', 'image', 'audio', 'video', 'document', 'location', 'other'
+  content = null,             // message_content
+  direction = 'inbound',      // 'inbound' o 'outbound'
+  wineId = null,              // wine_id (si está consultando un vino)
+  draftId = null,             // draft_id (wine_drafts.id)
+  hotelId = null,             // hotel_id (siempre null para Enolobot)
+  sessionId = null            // session_id (identificador de sesión)
+}) {
+  try {
+    const query = `
+      INSERT INTO conversation_logs 
+      (hotel_id, phone, message_type, message_content, direction, wine_id, draft_id, session_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `;
+    const values = [
+      hotelId,
+      phone, 
+      messageType, 
+      content, 
+      direction,
+      wineId, 
+      draftId,
+      sessionId
+    ];
+    await pool.query(query, values);
+    logger.info({ 
+      svc: 'db', 
+      action: 'logConversation', 
+      phone, 
+      messageType, 
+      direction 
+    });
+    return true;
+  } catch (err) {
+    logger.error({ 
+      svc: 'db', 
+      action: 'logConversation', 
+      error: err.message, 
+      phone, 
+      messageType 
+    });
+    // No lanzar error para que el flujo continúe
+    return false;
+  }
+}
+
+// ...existing code...
+/**
+ * Obtener historial de conversación de un usuario
+ */
+export async function getConversationHistory(pool, phone, limit = 50) {
+  try {
+    const query = `
+      SELECT 
+        cl.*,
+        w.name as wine_name,
+        wd.customer_name
+      FROM conversation_logs cl
+      LEFT JOIN wines w ON cl.wine_id = w.id
+      LEFT JOIN wine_drafts wd ON cl.draft_id = wd.id
+      WHERE cl.phone = ?
+      ORDER BY cl.created_at DESC
+      LIMIT ?
+    `;
+    const [rows] = await pool.query(query, [phone, limit]);
+    return rows;
+  } catch (err) {
+    logger.error('getConversationHistory failed', { err: err.message, phone });
+    return [];
+  }
+}
+
+/**
+ * Obtener estadísticas de conversaciones
+ */
+export async function getConversationStats(pool, startDate = null, endDate = null) {
+  try {
+    let query = `
+      SELECT 
+        COUNT(DISTINCT phone) as unique_users,
+        COUNT(*) as total_interactions,
+        SUM(CASE WHEN message_type = 'text' THEN 1 ELSE 0 END) as text_messages,
+        SUM(CASE WHEN message_type = 'button' THEN 1 ELSE 0 END) as button_clicks,
+        COUNT(DISTINCT DATE(created_at)) as active_days
+      FROM conversation_logs
+      WHERE 1=1
+    `;
+    const values = [];
+    
+    if (startDate) {
+      values.push(startDate);
+      query += ` AND created_at >= ?`;
+    }
+    if (endDate) {
+      values.push(endDate);
+      query += ` AND created_at <= ?`;
+    }
+    
+    const [rows] = await pool.query(query, values);
+    return rows[0];
+  } catch (err) {
+    logger.error('getConversationStats failed', { err: err.message });
+    return null;
+  }
+}
+
+/**
+ * Obtener vinos más consultados
+ */
+export async function getMostViewedWines(pool, limit = 10) {
+  try {
+    const query = `
+      SELECT 
+        w.id,
+        w.name,
+        COUNT(*) as view_count
+      FROM conversation_logs cl
+      JOIN wines w ON cl.wine_id = w.id
+      WHERE cl.wine_id IS NOT NULL
+      GROUP BY w.id, w.name
+      ORDER BY view_count DESC
+      LIMIT ?
+    `;
+    const [rows] = await pool.query(query, [limit]);
+    return rows;
+  } catch (err) {
+    logger.error('getMostViewedWines failed', { err: err.message });
+    return [];
+  }
+}
